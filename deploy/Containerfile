@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY NuGet.config ./
+COPY src/LlmGateway.Core/LlmGateway.Core.csproj src/LlmGateway.Core/
+COPY src/LlmGateway.Infrastructure/LlmGateway.Infrastructure.csproj src/LlmGateway.Infrastructure/
+COPY src/LlmGateway.Api/LlmGateway.Api.csproj src/LlmGateway.Api/
+RUN dotnet restore src/LlmGateway.Api/LlmGateway.Api.csproj
+
+COPY src/ src/
+RUN dotnet publish src/LlmGateway.Api/LlmGateway.Api.csproj \
+    -c Release \
+    -o /out/app \
+    --no-restore \
+    -p:UseAppHost=false
+
+RUN mkdir -p /out/data
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+
+# UID/GID 1654 is the non-root APP_UID baked into chiseled images.
+WORKDIR /app
+COPY --from=build /out/app .
+COPY --from=build --chown=1654:1654 /out/data /data
+
+ENV ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_ENVIRONMENT=Production \
+    Storage__ConnectionString="Data Source=/data/gateway.db" \
+    DOTNET_EnableDiagnostics=0
+
+USER 1654
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "LlmGateway.Api.dll"]

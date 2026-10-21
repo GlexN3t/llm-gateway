@@ -1,0 +1,31 @@
+@host = http://localhost:5210
+@key = gw-dev-demo-key-change-me
+
+GET {{host}}/healthz
+Accept: application/json
+
+###
+
+POST {{host}}/v1/chat/completions
+Authorization: Bearer {{key}}
+Content-Type: application/json
+
+{
+  "model": "demo-model",
+  "messages": [
+    { "role": "user", "content": "Hello from the .http file" }
+  ]
+}
+
+###
+
+POST {{host}}/v1/chat/completions
+Authorization: Bearer wrong-key
+Content-Type: application/json
+
+{
+  "model": "demo-model",
+  "messages": [
+    { "role": "user", "content": "This should be rejected with 401" }
+  ]
+}

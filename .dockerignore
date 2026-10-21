@@ -1,0 +1,12 @@
+**/bin
+**/obj
+**/data
+.git
+.gitignore
+*.db
+*.db-shm
+*.db-wal
+*.user
+.vs
+.idea
+deploy/.env
