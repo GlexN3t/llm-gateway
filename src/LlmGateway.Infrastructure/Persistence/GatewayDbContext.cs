@@ -16,6 +16,8 @@ public sealed class GatewayDbContext(DbContextOptions<GatewayDbContext> options)
             entity.Property(t => t.Name).HasMaxLength(200);
             entity.Property(t => t.ApiKeyHash).HasMaxLength(200);
             entity.Property(t => t.ApiKeySalt).HasMaxLength(200);
+            entity.Property(t => t.ApiKeyLookup).HasMaxLength(100);
+            entity.HasIndex(t => t.ApiKeyLookup);
         });
 
         modelBuilder.Entity<UsageRecordEntity>(entity =>

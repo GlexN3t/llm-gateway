@@ -6,6 +6,17 @@ Accept: application/json
 
 ###
 
+GET {{host}}/readyz
+Accept: application/json
+
+###
+
+GET {{host}}/v1/models
+Authorization: Bearer {{key}}
+Accept: application/json
+
+###
+
 POST {{host}}/v1/chat/completions
 Authorization: Bearer {{key}}
 Content-Type: application/json
@@ -14,6 +25,20 @@ Content-Type: application/json
   "model": "demo-model",
   "messages": [
     { "role": "user", "content": "Hello from the .http file" }
+  ]
+}
+
+###
+
+POST {{host}}/v1/chat/completions
+Authorization: Bearer {{key}}
+X-Request-Id: my-trace-1
+Content-Type: application/json
+
+{
+  "model": "demo-model",
+  "messages": [
+    { "role": "user", "content": "This response should be a cache HIT" }
   ]
 }
 
@@ -29,3 +54,9 @@ Content-Type: application/json
     { "role": "user", "content": "This should be rejected with 401" }
   ]
 }
+
+###
+
+GET {{host}}/v1/usage
+Authorization: Bearer {{key}}
+Accept: application/json

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 
 namespace LlmGateway.Core.Security;
 
@@ -21,5 +22,11 @@ public sealed class ApiKeyHasher
         var hash = Rfc2898DeriveBytes.Pbkdf2(apiKey, saltBytes, Iterations, HashAlgorithmName.SHA256, HashSize);
         var expected = Convert.FromBase64String(expectedHash);
         return CryptographicOperations.FixedTimeEquals(hash, expected);
+    }
+
+    public static string ComputeLookup(string apiKey)
+    {
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(apiKey));
+        return Convert.ToBase64String(digest);
     }
 }

@@ -6,7 +6,9 @@ public sealed class ModelRouter
 
     public ModelRouter(IEnumerable<(string Pattern, ILlmProvider Provider)> rules)
     {
-        _rules = [.. rules];
+        _rules = [.. rules
+            .OrderBy(rule => PatternRank(rule.Pattern))
+            .ThenByDescending(rule => rule.Pattern.Length)];
     }
 
     public ILlmProvider Resolve(string model)
@@ -26,4 +28,11 @@ public sealed class ModelRouter
         pattern == "*"
         || (pattern.EndsWith('*') && model.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase))
         || string.Equals(pattern, model, StringComparison.OrdinalIgnoreCase);
+
+    private static int PatternRank(string pattern) => pattern switch
+    {
+        "*" => 2,
+        _ when pattern.EndsWith('*') => 1,
+        _ => 0,
+    };
 }

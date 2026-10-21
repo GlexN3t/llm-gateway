@@ -12,4 +12,14 @@ public sealed class DbTenantStore(IDbContextFactory<GatewayDbContext> dbFactory)
         var entities = db.Tenants.AsNoTracking().ToList();
         return [.. entities.Select(t => t.ToDomain())];
     }
+
+    public Tenant? FindByKeyLookup(string lookup)
+    {
+        using var db = dbFactory.CreateDbContext();
+        var entity = db.Tenants
+            .AsNoTracking()
+            .FirstOrDefault(t => t.ApiKeyLookup == lookup);
+
+        return entity?.ToDomain();
+    }
 }

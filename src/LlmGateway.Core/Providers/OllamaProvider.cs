@@ -6,10 +6,12 @@ namespace LlmGateway.Core.Providers;
 public sealed class OllamaProvider : ILlmProvider
 {
     private readonly HttpClient _http;
+    private readonly ProviderTransportOptions _options;
 
-    public OllamaProvider(HttpClient http)
+    public OllamaProvider(HttpClient http, ProviderTransportOptions? options = null)
     {
         _http = http;
+        _options = options ?? new ProviderTransportOptions();
     }
 
     public string Name => "ollama";
@@ -22,11 +24,18 @@ public sealed class OllamaProvider : ILlmProvider
             Stream: false,
             Options: request.Temperature is null ? null : new OllamaOptions(request.Temperature.Value));
 
-        using var response = await _http.PostAsJsonAsync("/api/chat", payload, ct);
-        response.EnsureSuccessStatusCode();
+        using var response = await ProviderTransport.SendAsync(
+            _http,
+            () => new HttpRequestMessage(HttpMethod.Post, "/api/chat")
+            {
+                Content = JsonContent.Create(payload),
+            },
+            Name,
+            _options,
+            ct);
 
         var body = await response.Content.ReadFromJsonAsync<OllamaResponse>(ct)
-            ?? throw new InvalidOperationException("Empty response from Ollama.");
+            ?? throw new ProviderException(Name, ProviderErrorKind.InvalidResponse, "ollama returned an empty body.");
 
         return new ChatResponse
         {

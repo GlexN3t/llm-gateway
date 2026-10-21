@@ -6,10 +6,12 @@ namespace LlmGateway.Core.Providers;
 public sealed class OpenAiProvider : ILlmProvider
 {
     private readonly HttpClient _http;
+    private readonly ProviderTransportOptions _options;
 
-    public OpenAiProvider(HttpClient http)
+    public OpenAiProvider(HttpClient http, ProviderTransportOptions? options = null)
     {
         _http = http;
+        _options = options ?? new ProviderTransportOptions();
     }
 
     public string Name => "openai";
@@ -22,11 +24,23 @@ public sealed class OpenAiProvider : ILlmProvider
             request.Temperature,
             request.MaxTokens);
 
-        using var response = await _http.PostAsJsonAsync("/v1/chat/completions", payload, ct);
-        response.EnsureSuccessStatusCode();
+        using var response = await ProviderTransport.SendAsync(
+            _http,
+            () => new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
+            {
+                Content = JsonContent.Create(payload),
+            },
+            Name,
+            _options,
+            ct);
 
         var body = await response.Content.ReadFromJsonAsync<OpenAiResponse>(ct)
-            ?? throw new InvalidOperationException("Empty response from OpenAI.");
+            ?? throw new ProviderException(Name, ProviderErrorKind.InvalidResponse, "openai returned an empty body.");
+
+        if (body.Choices.Count == 0)
+        {
+            throw new ProviderException(Name, ProviderErrorKind.InvalidResponse, "openai returned no completion choices.");
+        }
 
         return new ChatResponse
         {

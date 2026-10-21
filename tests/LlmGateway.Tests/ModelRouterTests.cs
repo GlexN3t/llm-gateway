@@ -68,4 +68,39 @@ public class ModelRouterTests
 
         Assert.Throws<InvalidOperationException>(() => router.Resolve("claude-x"));
     }
+
+    [Fact]
+    public void Wildcard_never_shadows_a_specific_route_regardless_of_order()
+    {
+        var openai = new StubProvider("openai");
+        var fake = new StubProvider("fake");
+
+        var router = new ModelRouter([("*", fake), ("gpt-*", openai)]);
+
+        Assert.Same(openai, router.Resolve("gpt-4o-mini"));
+        Assert.Same(fake, router.Resolve("anything-else"));
+    }
+
+    [Fact]
+    public void Exact_match_wins_over_prefix_pattern()
+    {
+        var prefix = new StubProvider("prefix");
+        var exact = new StubProvider("exact");
+
+        var router = new ModelRouter([("gpt-*", prefix), ("gpt-4o", exact)]);
+
+        Assert.Same(exact, router.Resolve("gpt-4o"));
+        Assert.Same(prefix, router.Resolve("gpt-4o-mini"));
+    }
+
+    [Fact]
+    public void Longer_prefix_wins_over_shorter_prefix()
+    {
+        var shortPrefix = new StubProvider("short");
+        var longPrefix = new StubProvider("long");
+
+        var router = new ModelRouter([("gpt-*", shortPrefix), ("gpt-4o-*", longPrefix)]);
+
+        Assert.Same(longPrefix, router.Resolve("gpt-4o-mini"));
+    }
 }

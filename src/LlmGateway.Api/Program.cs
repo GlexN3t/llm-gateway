@@ -1,4 +1,6 @@
 using System.Net.Http.Headers;
+using System.Threading.RateLimiting;
+using LlmGateway.Api;
 using LlmGateway.Api.Endpoints;
 using LlmGateway.Api.Middleware;
 using LlmGateway.Core;
@@ -42,6 +44,36 @@ builder.Services.AddSingleton<IUsageStore, EfUsageStore>();
 builder.Services.AddSingleton(new CostCalculator(
     builder.Configuration.GetSection("Pricing").Get<Dictionary<string, ModelPrice>>() ?? []));
 
+var rateLimitPermit = builder.Configuration.GetValue("RateLimit:PermitPerMinute", 60);
+var rateLimitQueue = builder.Configuration.GetValue("RateLimit:QueueLimit", 0);
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, _) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await Results.Problem(
+                statusCode: StatusCodes.Status429TooManyRequests,
+                title: "Rate limit exceeded",
+                detail: "Too many requests for this tenant. Retry once the window resets.")
+            .ExecuteAsync(context.HttpContext);
+    };
+
+    options.AddPolicy(RateLimiting.PolicyName, httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        httpContext.Items[HttpContextItems.TenantId] as string
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = rateLimitPermit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = rateLimitQueue,
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+        }));
+});
+
 builder.Services.AddHttpClient("openai", http =>
 {
     http.BaseAddress = new Uri(providersConfig["OpenAI:BaseUrl"] ?? "https://api.openai.com");
@@ -76,18 +108,22 @@ builder.Services.AddHttpClient("ollama", http =>
     PooledConnectionLifetime = TimeSpan.FromMinutes(5),
 });
 
+ProviderTransportOptions ProviderOptions(string provider) => new(
+    MaxAttempts: builder.Configuration.GetValue($"Providers:{provider}:MaxAttempts", 3),
+    Timeout: TimeSpan.FromSeconds(builder.Configuration.GetValue($"Providers:{provider}:TimeoutSeconds", 60)));
+
 builder.Services.AddKeyedSingleton<ILlmProvider>("fake", (_, _) => new FakeProvider());
 builder.Services.AddKeyedSingleton<ILlmProvider>("openai", (sp, _) =>
-    new OpenAiProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient("openai")));
+    new OpenAiProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient("openai"), ProviderOptions("openai")));
 builder.Services.AddKeyedSingleton<ILlmProvider>("anthropic", (sp, _) =>
-    new AnthropicProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient("anthropic")));
+    new AnthropicProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient("anthropic"), ProviderOptions("anthropic")));
 builder.Services.AddKeyedSingleton<ILlmProvider>("ollama", (sp, _) =>
-    new OllamaProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ollama")));
+    new OllamaProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ollama"), ProviderOptions("ollama")));
 
 builder.Services.AddSingleton(sp =>
 {
-    var routing = builder.Configuration.GetSection("Gateway:Routing").Get<Dictionary<string, string>>() ?? [];
-    var rules = routing.Select(kv => (kv.Key, sp.GetRequiredKeyedService<ILlmProvider>(kv.Value)));
+    var routing = builder.Configuration.GetSection("Gateway:Routing").Get<GatewayRoute[]>() ?? [];
+    var rules = routing.Select(kv => (kv.Pattern, sp.GetRequiredKeyedService<ILlmProvider>(kv.Provider)));
     return new ModelRouter(rules);
 });
 
@@ -120,6 +156,7 @@ using (var scope = app.Services.CreateScope())
             Name = devTenantName,
             ApiKeyHash = hash,
             ApiKeySalt = salt,
+            ApiKeyLookup = ApiKeyHasher.ComputeLookup(devApiKey),
         });
         await db.SaveChangesAsync();
     }
@@ -135,9 +172,31 @@ else
     app.UseHttpsRedirection();
 }
 
+app.UseMiddleware<RequestIdMiddleware>();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<ApiKeyAuthMiddleware>();
+app.UseRateLimiter();
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
+
+app.MapGet("/readyz", async (IDbContextFactory<GatewayDbContext> dbFactory, CancellationToken ct) =>
+{
+    try
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Database.CanConnectAsync(ct)
+            ? Results.Ok(new { status = "ready" })
+            : Results.Json(new { status = "unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(
+            new { status = "unavailable", error = ex.Message },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapModelEndpoints();
 app.MapChatEndpoints();
 app.MapUsageEndpoints();
 

@@ -65,7 +65,7 @@ public class OpenAiProviderTests
 
         Assert.Equal("/v1/chat/completions", handler.LastRequest!.RequestUri!.AbsolutePath);
 
-        var body = await handler.LastRequest.Content!.ReadAsStringAsync();
+        var body = handler.LastRequestBody;
         Assert.Contains("\"model\":\"gpt-4o-mini\"", body);
         Assert.Contains("\"role\":\"user\"", body);
         Assert.Contains("\"temperature\":0.2", body);

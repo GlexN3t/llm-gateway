@@ -6,11 +6,13 @@ namespace LlmGateway.Core.Providers;
 public sealed class AnthropicProvider : ILlmProvider
 {
     private readonly HttpClient _http;
+    private readonly ProviderTransportOptions _options;
 
-    public AnthropicProvider(HttpClient http)
+    public AnthropicProvider(HttpClient http, ProviderTransportOptions? options = null)
     {
         http.DefaultRequestHeaders.TryAddWithoutValidation("anthropic-version", "2023-06-01");
         _http = http;
+        _options = options ?? new ProviderTransportOptions();
     }
 
     public string Name => "anthropic";
@@ -30,13 +32,25 @@ public sealed class AnthropicProvider : ILlmProvider
             messages,
             request.Temperature);
 
-        using var response = await _http.PostAsJsonAsync("/v1/messages", payload, ct);
-        response.EnsureSuccessStatusCode();
+        using var response = await ProviderTransport.SendAsync(
+            _http,
+            () => new HttpRequestMessage(HttpMethod.Post, "/v1/messages")
+            {
+                Content = JsonContent.Create(payload),
+            },
+            Name,
+            _options,
+            ct);
 
         var body = await response.Content.ReadFromJsonAsync<AnthropicResponse>(ct)
-            ?? throw new InvalidOperationException("Empty response from Anthropic.");
+            ?? throw new ProviderException(Name, ProviderErrorKind.InvalidResponse, "anthropic returned an empty body.");
 
         var text = string.Concat(body.Content.Where(c => c.Type == "text").Select(c => c.Text));
+
+        if (body.Content.Count == 0)
+        {
+            throw new ProviderException(Name, ProviderErrorKind.InvalidResponse, "anthropic returned no content blocks.");
+        }
 
         return new ChatResponse
         {

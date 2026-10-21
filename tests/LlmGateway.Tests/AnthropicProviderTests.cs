@@ -70,7 +70,7 @@ public class AnthropicProviderTests
         Assert.Equal("/v1/messages", handler.LastRequest!.RequestUri!.AbsolutePath);
         Assert.True(handler.LastRequest.Headers.TryGetValues("anthropic-version", out _));
 
-        var body = await handler.LastRequest.Content!.ReadAsStringAsync();
+        var body = handler.LastRequestBody;
         Assert.Contains("\"system\":\"You are helpful\"", body);
         Assert.DoesNotContain("\"role\":\"system\"", body);
         Assert.Contains("\"role\":\"user\"", body);

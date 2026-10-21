@@ -63,7 +63,7 @@ public class OllamaProviderTests
 
         Assert.Equal("/api/chat", handler.LastRequest!.RequestUri!.AbsolutePath);
 
-        var body = await handler.LastRequest.Content!.ReadAsStringAsync();
+        var body = handler.LastRequestBody;
         Assert.Contains("\"stream\":false", body);
     }
 }

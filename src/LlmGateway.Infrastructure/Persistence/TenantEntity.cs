@@ -8,7 +8,8 @@ public sealed class TenantEntity
     public string Name { get; set; } = string.Empty;
     public string ApiKeyHash { get; set; } = string.Empty;
     public string ApiKeySalt { get; set; } = string.Empty;
+    public string? ApiKeyLookup { get; set; }
     public bool PiiRedactionEnabled { get; set; } = true;
 
-    public Tenant ToDomain() => new(Id, Name, ApiKeyHash, ApiKeySalt, PiiRedactionEnabled);
+    public Tenant ToDomain() => new(Id, Name, ApiKeyHash, ApiKeySalt, PiiRedactionEnabled, ApiKeyLookup);
 }

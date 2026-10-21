@@ -7,6 +7,7 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
     public async Task InvokeAsync(HttpContext context, TenantAuthenticator authenticator, TenantContext tenantContext)
     {
         if (context.Request.Path.StartsWithSegments("/healthz")
+            || context.Request.Path.StartsWithSegments("/readyz")
             || context.Request.Path.StartsWithSegments("/openapi"))
         {
             await next(context);
@@ -27,6 +28,8 @@ public sealed class ApiKeyAuthMiddleware(RequestDelegate next)
                 .ExecuteAsync(context);
             return;
         }
+
+        context.Items[HttpContextItems.TenantId] = tenantContext.Tenant.Id;
 
         await next(context);
     }

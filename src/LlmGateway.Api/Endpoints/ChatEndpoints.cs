@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LlmGateway.Core;
 using LlmGateway.Core.Caching;
 using LlmGateway.Core.Privacy;
@@ -9,9 +10,10 @@ namespace LlmGateway.Api.Endpoints;
 
 public static class ChatEndpoints
 {
-    public static void MapChatEndpoints(this WebApplication app)
+    public static IEndpointConventionBuilder MapChatEndpoints(this WebApplication app)
     {
-        app.MapPost("/v1/chat/completions", HandleAsync);
+        return app.MapPost("/v1/chat/completions", HandleAsync)
+            .RequireRateLimiting(RateLimiting.PolicyName);
     }
 
     private static async Task<IResult> HandleAsync(
@@ -23,8 +25,11 @@ public static class ChatEndpoints
         IUsageStore usageStore,
         PiiRedactor piiRedactor,
         IChatCache cache,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
+        var logger = loggerFactory.CreateLogger("LlmGateway.Chat");
+        var stopwatch = Stopwatch.StartNew();
         var tenant = tenantContext.RequireTenant();
 
         if (request is null || string.IsNullOrWhiteSpace(request.Model))
@@ -95,6 +100,8 @@ public static class ChatEndpoints
             response = response with { Content = piiRedactor.Restore(response.Content, redactionMap) };
         }
 
+        var cost = fromCache ? 0m : costCalculator.Calculate(response.Model, response.Usage);
+
         await usageStore.RecordAsync(new UsageRecord(
             Id: 0,
             TenantId: tenant.Id,
@@ -102,9 +109,20 @@ public static class ChatEndpoints
             Provider: response.Provider,
             PromptTokens: response.Usage.PromptTokens,
             CompletionTokens: response.Usage.CompletionTokens,
-            CostUsd: fromCache ? 0m : costCalculator.Calculate(response.Model, response.Usage),
+            CostUsd: cost,
             CreatedAt: DateTimeOffset.UtcNow,
             Cached: fromCache), ct);
+
+        logger.LogInformation(
+            "Chat completion tenant {TenantId} model {Model} provider {Provider} cached {Cached} promptTokens {PromptTokens} completionTokens {CompletionTokens} costUsd {CostUsd} durationMs {DurationMs}",
+            tenant.Id,
+            response.Model,
+            response.Provider,
+            fromCache,
+            response.Usage.PromptTokens,
+            response.Usage.CompletionTokens,
+            cost,
+            stopwatch.ElapsedMilliseconds);
 
         return Results.Ok(ChatCompletionResponse.From(response));
     }
