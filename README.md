@@ -1,5 +1,9 @@
 # LLM Gateway
 
+[![CI](https://github.com/GlexN3t/llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/GlexN3t/llm-gateway/actions/workflows/ci.yml)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A self-hosted AI proxy that fronts multiple LLM providers behind one OpenAI-compatible
 endpoint, with per-tenant API keys, cost tracking, PII redaction, and response caching.
 
