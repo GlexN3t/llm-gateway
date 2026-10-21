@@ -151,6 +151,10 @@ podman run --name llm-gateway -p 8080:8080 \
   best-effort guardrail, not a compliance boundary; test against your own data.
 - No request bodies or prompts are logged.
 
+## License
+
+MIT — see [LICENSE](LICENSE).
+
 ## Roadmap
 
 - Streaming (SSE) responses
