@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible problem with the LLM Gateway
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please keep it reproducible and
+        minimal — a small request that shows the wrong behaviour is worth more than
+        a long description.
+
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What happened
+      description: What did you observe, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Request/response pair, config, or steps to reproduce.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: e.g. v1.0.0 or 138ec38
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Routing / providers
+        - Authentication / tenancy
+        - PII redaction
+        - Usage / cost tracking
+        - Caching
+        - Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Sanitized logs or error output. Please redact API keys and PII.
+      render: shell
